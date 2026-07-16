@@ -1,0 +1,65 @@
+import streamlit as st
+from google import genai
+
+# 1. Configuración de la interfaz de usuario
+st.set_page_config(page_title="Mi Asistente IA", page_icon="🤖", layout="centered")
+
+st.title("🤖 Mi Asistente de IA Personalizado")
+st.write("¡Bienvenido! Elige una personalidad para tu asistente y empieza a chatear.")
+
+# 2. Selección de personalidad
+personalidad = st.selectbox(
+    "¿Con quién quieres hablar hoy?",
+    ("Tutor de Programación Socrático 🧑‍💻", "Chef Italiano Sarcástico 🍳", "Modo Shark Tank / Inversionista Estricto 🦈")
+)
+
+# Definimos las instrucciones del sistema según la selección
+if personalidad == "Tutor de Programación Socrático 🧑‍💻":
+    system_instruction = """
+    Eres un tutor de programación increíblemente paciente y amigable. 
+    Tu objetivo es ayudar al usuario a aprender a programar, pero tienes una regla de oro: 
+    ¡NUNCA des la respuesta o el código resuelto directamente! 
+    En su lugar, guía al usuario haciendo preguntas socráticas, dando pistas y analogías sencillas.
+    """
+elif personalidad == "Chef Italiano Sarcástico 🍳":
+    system_instruction = """
+    Eres un chef de alta cocina italiano con un humor un poco sarcástico y exagerado. 
+    Cuando el usuario te pida recetas o ingredientes, dale instrucciones detalladas pero bromea sobre sus elecciones. 
+    Usa expresiones en italiano como '¡Mamma mia!' o '¡Delizioso!' frecuentemente.
+    """
+else:
+    system_instruction = """
+    Eres un inversionista y analista de negocios sumamente estricto y realista (estilo Shark Tank). 
+    Tu trabajo es evaluar las ideas de negocio que te presente el usuario de forma brutalmente honesta. 
+    Busca los puntos débiles y hazle 3 preguntas difíciles que deba responder para convencerte.
+    """
+
+# 3. Conexión segura con la API Key (utilizando los secretos de la plataforma de Streamlit)
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+    client = genai.Client(api_key=api_key)
+except Exception:
+    st.error("⚠️ Configura la variable 'GEMINI_API_KEY' en la configuración de Secrets de Streamlit.")
+    st.stop()
+
+# 4. Campo de texto para el usuario y lógica de envío
+user_input = st.text_input("Escribe tu mensaje aquí:", placeholder="¿Cómo puedo empezar un negocio de café?")
+
+if st.button("Enviar a la IA", type="primary"):
+    if user_input.strip() != "":
+        with st.spinner("Pensando..."):
+            try:
+                # Usamos el alias dinámico que probamos con éxito en Colab
+                response = client.models.generate_content(
+                    model='gemini-flash-latest',
+                    contents=user_input,
+                    config={
+                        'system_instruction': system_instruction
+                    }
+                )
+                st.success(f"🤖 Respuesta ({personalidad}):")
+                st.write(response.text)
+            except Exception as e:
+                st.error(f"Ocurrió un error al procesar la solicitud: {e}")
+    else:
+        st.warning("Por favor, escribe algo antes de presionar el botón.")
