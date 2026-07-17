@@ -58,7 +58,7 @@ if prompt := st.chat_input("Escribe un mensaje aquí..."):
         with st.spinner("Pensando..."):
             try:
                 response = client.models.generate_content(
-                    model='gemini-2.5-flash-lite',
+                    model='gemini-2.0-flash',
                     contents=historial_para_api, # <--- Enviamos TODO el historial acumulado
                     config=types.GenerateContentConfig(
                         system_instruction="Eres un asistente de IA muy amigable, divertido y conversacional. Saluda cordialmente."
