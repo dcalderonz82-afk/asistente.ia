@@ -1,40 +1,19 @@
 import streamlit as st
 from google import genai
+from google.genai import types
 
-# 1. Configuración de la interfaz de usuario
-st.set_page_config(page_title="Mi Asistente IA", page_icon="🤖", layout="centered")
+# 1. Configuración de la página web
+st.set_page_config(page_title="Mi Chatbot con Memoria", page_icon="💬", layout="centered")
 
-st.title("🤖 Mi Asistente de IA Personalizado")
-st.write("¡Bienvenido! Elige una personalidad para tu asistente y empieza a chatear.")
+st.title("💬 Mi Chatbot Inteligente")
+st.write("Pregúntame lo que sea. ¡Ahora recuerdo todo lo que me dices en esta sesión!")
 
-# 2. Selección de personalidad
-personalidad = st.selectbox(
-    "¿Con quién quieres hablar hoy?",
-    ("Tutor de Programación Socrático 🧑‍💻", "Chef Italiano Sarcástico 🍳", "Modo Shark Tank / Inversionista Estricto 🦈")
-)
+# Botón para limpiar el historial y empezar de nuevo
+if st.button("Limpiar conversación 🔄"):
+    st.session_state.messages = []
+    st.rerun()
 
-# Definimos las instrucciones del sistema según la selección
-if personalidad == "Tutor de Programación Socrático 🧑‍💻":
-    system_instruction = """
-    Eres un tutor de programación increíblemente paciente y amigable. 
-    Tu objetivo es ayudar al usuario a aprender a programar, pero tienes una regla de oro: 
-    ¡NUNCA des la respuesta o el código resuelto directamente! 
-    En su lugar, guía al usuario haciendo preguntas socráticas, dando pistas y analogías sencillas.
-    """
-elif personalidad == "Chef Italiano Sarcástico 🍳":
-    system_instruction = """
-    Eres un chef de alta cocina italiano con un humor un poco sarcástico y exagerado. 
-    Cuando el usuario te pida recetas o ingredientes, dale instrucciones detalladas pero bromea sobre sus elecciones. 
-    Usa expresiones en italiano como '¡Mamma mia!' o '¡Delizioso!' frecuentemente.
-    """
-else:
-    system_instruction = """
-    Eres un inversionista y analista de negocios sumamente estricto y realista (estilo Shark Tank). 
-    Tu trabajo es evaluar las ideas de negocio que te presente el usuario de forma brutalmente honesta. 
-    Busca los puntos débiles y hazle 3 preguntas difíciles que deba responder para convencerte.
-    """
-
-# 3. Conexión segura con la API Key (utilizando los secretos de la plataforma de Streamlit)
+# 2. Conexión segura con la API Key
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     client = genai.Client(api_key=api_key)
@@ -42,24 +21,55 @@ except Exception:
     st.error("⚠️ Configura la variable 'GEMINI_API_KEY' en la configuración de Secrets de Streamlit.")
     st.stop()
 
-# 4. Campo de texto para el usuario y lógica de envío
-user_input = st.text_input("Escribe tu mensaje aquí:", placeholder="¿Cómo puedo empezar un negocio de café?")
+# 3. Inicializar la "memoria" si es la primera vez que entramos
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-if st.button("Enviar a la IA", type="primary"):
-    if user_input.strip() != "":
+# 4. Mostrar en pantalla todos los mensajes que ya están guardados en la memoria
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# 5. Capturar el nuevo mensaje del usuario (usando la elegante barra de chat inferior)
+if prompt := st.chat_input("Escribe un mensaje aquí..."):
+    
+    # Mostramos el mensaje del usuario de inmediato en la pantalla
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    
+    # Guardamos el mensaje en nuestra "caja fuerte" de memoria
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # 6. Preparar el historial en el formato exacto que Gemini necesita recibir
+    historial_para_api = []
+    for msg in st.session_state.messages:
+        # Gemini espera que el rol del bot se llame 'model' en lugar de 'assistant'
+        role_api = "user" if msg["role"] == "user" else "model"
+        
+        historial_para_api.append(
+            types.Content(
+                role=role_api,
+                parts=[types.Part.from_text(text=msg["content"])]
+            )
+        )
+
+    # 7. Solicitar la respuesta enviando el historial de chat completo
+    with st.chat_message("assistant"):
         with st.spinner("Pensando..."):
             try:
-                # Usamos el alias dinámico que probamos con éxito en Colab
                 response = client.models.generate_content(
-                    model='gemini-flash-latest',
-                    contents=user_input,
-                    config={
-                        'system_instruction': system_instruction
-                    }
+                    model='gemini-2.5-flash-lite',
+                    contents=historial_para_api, # <--- Enviamos TODO el historial acumulado
+                    config=types.GenerateContentConfig(
+                        system_instruction="Eres un asistente de IA muy amigable, divertido y conversacional. Saluda cordialmente."
+                    )
                 )
-                st.success(f"🤖 Respuesta ({personalidad}):")
-                st.write(response.text)
+                
+                # Mostramos la respuesta del bot en la pantalla
+                st.markdown(response.text)
+                
+                # Guardamos la respuesta del bot en la "caja fuerte" de memoria
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                
             except Exception as e:
-                st.error(f"Ocurrió un error al procesar la solicitud: {e}")
-    else:
-        st.warning("Por favor, escribe algo antes de presionar el botón.")
+                st.error(f"Ocurrió un error: {e}")
